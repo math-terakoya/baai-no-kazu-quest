@@ -357,8 +357,9 @@ padding: 14px 0; text-shadow: 3px 3px 0 #400; animation: warn 2s forwards;
       <text x="165" y="85" fill="#fff" font-size="12" text-anchor="middle">A∩B</text>
     </svg>
     <div class="points" id="defPoints">
-      <div>・<b>A∪B</b>（または）：A か B の どちらかに 入る もの</div>
+      <div>・<b>A∪B</b>（または）：A と B の 少なくとも 一方に 入る もの</div>
       <div>・<b>A∩B</b>（かつ）：A と B の 両方に 入る もの</div>
+      <div>・<b>A∩B ＝ ∅</b>（排反、重なりが ない）の ときは、A∪B は A か B の どちらか 一方に 入る もの</div>
       <div>・<b><span class="ov">A</span></b>（でない）：全体 U の うち A に 入らない もの（補集合）</div>
       <div>・<b>3 ∈ A</b>：3 は A の 要素、<b>B ⊂ A</b>：B は A の 部分集合</div>
       <div>・<b>n(A)</b>：A の 要素の 個数</div>
@@ -690,7 +691,7 @@ function texts(q) {
 function reasonLines(q) {
   const m = q.mode, L = [], add = s => L.push(s);
   if (m === 'vennTap' || m === 'vennPick' || m === 'deMorgan') {
-    add('∪ は「または」（どちらかに 入る）、∩ は「かつ」（両方に 入る）、上の 線は「でない」（その 外がわ）');
+    add('∪ は「または」（少なくとも 一方に 入る）、∩ は「かつ」（両方に 入る）、上の 線は「でない」（その 外がわ）');
     if (m === 'deMorgan' || DM_WRONG[q.ex]) add('線を 分けると ∪ と ∩ が 入れかわる：‾{A∪B} ＝ ‾{A}∩‾{B}、‾{A∩B} ＝ ‾{A}∪‾{B}');
     if (m === 'deMorgan') add('→ ' + q.ex + ' ＝ ' + q.same);
   }
@@ -699,11 +700,11 @@ function reasonLines(q) {
     add({ in: () => q.x + ' は ' + setStr(q.S) + ' の 要素 → ∈', notin: () => q.x + ' は ' + setStr(q.S) + ' に 入って いない → ∉', sub: () => setStr(q.T) + ' の 要素は どれも ' + setStr(q.S) + ' に 入る → ⊂', sup: () => setStr(q.S) + ' は ' + setStr(q.T) + ' を ふくむ → ⊃（口の 開いた ほうが 大きい）' }[q.rel]());
   }
   if (m === 'countF') {
-    if (q.kind === 'union') add('A と B を 足すと、両方に 入る ' + q.c + ' を 2回 数える → 1回 引く');
+    if (q.kind === 'union') { add('A と B を 足すと、両方に 入る ' + q.c + ' を 2回 数える → 1回 引く'); add('A∩B ＝ ∅（排反）なら 引く ものが ない → n(A) ＋ n(B)（第2章の 和の法則）'); }
     if (q.kind === 'comp') add('‾{A} は A でない もの → 全体から A を 引く');
     if (q.kind === 'neither') { add('‾{A}∩‾{B} ＝ ‾{A∪B}（A にも B にも 入らない）→ 全体から n(A∪B) を 引く'); add('n(A∪B) ＝ ' + q.a + ' ＋ ' + q.b + ' − ' + q.c); }
   }
-  if (m === 'rule') add(RULES[q.sc].kind === 'sum' ? '同時に えらばない（どちらか 1つ）→ 和の 法則：足す' : '続けて えらぶ（両方 えらぶ）→ 積の 法則：かける');
+  if (m === 'rule') add(RULES[q.sc].kind === 'sum' ? '同時に 起こらない（排反：A∩B ＝ ∅）→ A∪B は どちらか 一方 → 和の 法則：足す' : '続けて えらぶ（両方 えらぶ）→ 積の 法則：かける');
   if (m === 'divisor') { add('約数は ' + q.b1 + ' を 0〜' + q.p + '個（' + (q.p + 1) + '通り）、' + q.b2 + ' を 0〜' + q.q + '個（' + (q.q + 1) + '通り）えらんで かけた もの'); add('0個も 数えるので ＋1、両方 えらぶので かける'); }
   if (m === 'routeMix') { add('B を 通る：' + q.a + ' × ' + q.b + '（続けて → かける）'); add('直通と B を 通る 行き方は 同時に 使わない → 足す'); }
   if (m === 'perm') add('えらんで 並べる（順番が ある）→ ₙPᵣ。' + q.n + '人から ' + q.r + '人 → ' + tP(q.n, q.r));
@@ -873,7 +874,7 @@ function hintLines(p) {
   }
   const ex = exOf(p) || '';
   if (p.mode === 'vennPick') L.push('ぬられた ところが A に 入るか、B に 入るかを 区画ごとに 見る');
-  if (ex.includes('∪') || p.mode === 'vennPick') L.push('∪：または（A か B の どちらかに 入る）');
+  if (ex.includes('∪') || p.mode === 'vennPick') L.push('∪：または（A と B の 少なくとも 一方に 入る）');
   if (ex.includes('∩') || p.mode === 'vennPick') L.push('∩：かつ（A と B の 両方に 入る）');
   if (ex.includes('‾') || p.mode === 'vennPick') L.push('上の 線：でない（線の 下の 集合の 外がわ）');
   if (/‾\{A[∪∩]B\}/.test(ex)) L.push('線が 全体に かかって いる → かっこの 中を 先に、その 外がわ');
@@ -1442,7 +1443,7 @@ function hintPartsText(q) {
   const h = C.hintParts(q), c = ['水色', 'オレンジ'];
   if (h.op === 'bar') return ['水色 ＝ ' + h.parts[0][0] + '。上の 線は その 外がわ'];
   if (h.op === 'id') return ['水色 ＝ ' + h.parts[0][0]];
-  return h.parts.map((x, i) => c[i] + ' ＝ ' + x[0]).concat([h.op === '∪' ? '∪：どちらかの 色が ある ところ' : '∩：両方の 色が 重なる ところ']);
+  return h.parts.map((x, i) => c[i] + ' ＝ ' + x[0]).concat([h.op === '∪' ? '∪：少なくとも 一方の 色が ある ところ' : '∩：両方の 色が 重なる ところ']);
 }
 function onCorrect(ev) {
   const c = chap(), boss = atBoss(), e = enemyNow(), q = p();
@@ -1606,7 +1607,7 @@ function next() { if (state.phase !== 'next' || !state.onNext) return; const cb 
 // ---------- チュートリアル ----------
 const TUT = [
   { prm: { mode: 'vennTap', ex: 'A∪B' },
-    msg: '【れんしゅう 1/3】∪ は「または」。A か B の どちらかに 入る ところを ぜんぶ ぬる。\n点滅して いる ところを タップしよう（3か所）',
+    msg: '【れんしゅう 1/3】∪ は「または」。A と B の 少なくとも 一方に 入る ところを ぜんぶ ぬる。\n点滅して いる ところを タップしよう（3か所）',
     wrongTap: 'そこは A にも B にも 入って いないよ。点滅して いる ところを タップしてね' },
   { prm: { mode: 'perm', n: 5, r: 3 },
     msg: '【れんしゅう 2/3】5人から 3人を えらんで 1列に 並べる → 順番が ある → ₅P₃ を えらぼう',
