@@ -296,6 +296,8 @@ padding: 14px 0; text-shadow: 3px 3px 0 #400; animation: warn 2s forwards;
 #controls.one { grid-template-columns: minmax(0, 1fr); }
 .key { min-width: 0; max-width: 100%; overflow: hidden; }
 #game, #status, #message, #battle, #problem, #controls { min-width: 0; max-width: 100%; }
+#game { max-width: 480px; }   /* パソコンでも スマホの 幅で まんなかに（すぐ 上の 行で 100% に 広がらない ように。2026-10-27）*/
+#problem .expr.exam { display: inline-block; max-width: 100%; }   /* 問題集の ことばは かたまりごと まんなかに（行の 頭は そろえる） */
 #status .row { min-width: 0; gap: 4px; }
 #status .row .value { min-width: 0; word-break: keep-all; overflow-wrap: break-word; text-align: right; }   /* ことばの 途中で 折らない（空白で 折る） */
 #message { overflow-wrap: anywhere; }
@@ -312,6 +314,9 @@ padding: 14px 0; text-shadow: 3px 3px 0 #400; animation: warn 2s forwards;
 #message, .overlay .points, .overlay p, #zukanList .tip { word-break: keep-all; overflow-wrap: anywhere; }
 .ov { border-top: 1.5px solid currentColor; padding-top: 1px; margin: 0 1px; }   /* 補集合の 上の 線 */
 #plane.blank { border-color: transparent; background: transparent; }   /* 図の ない 問題 */
+#hintBtn { display: block; margin: 4px auto 0; white-space: nowrap; background: #000; color: #ffd84a; border: 1px solid #ffd84a; font-family: inherit; font-size: 11px; padding: 2px 6px; cursor: pointer; }
+#hintBtn.hidden { display: none; }
+#hintBtn.used { color: #887a3a; border-color: #887a3a; }
 </style>
 </head>
 <body>
@@ -436,7 +441,7 @@ padding: 14px 0; text-shadow: 3px 3px 0 #400; animation: warn 2s forwards;
 
   <div class="rpg-window" id="battle">
     <button id="skipTut" class="hidden">とばす ▶▶</button>
-    <div id="enemy"><div id="monster">🎨</div><div id="monsterName">ヌリワケ</div><button id="ruleBtn">？ やくそく</button></div>
+    <div id="enemy"><div id="monster">🎨</div><div id="monsterName">ヌリワケ</div><button id="ruleBtn">？ やくそく</button><button id="hintBtn" class="hidden">💡 ヒント</button></div>
     <div id="problem">
       <div class="label" id="problemLabel">&nbsp;</div>
       <div class="expr" id="problemExpr">&nbsp;</div>
@@ -833,12 +838,64 @@ function build(prm, rng, opt = {}) {
   }
   p.reason = reasonLines(q);
   if (p.exam) p.reason.push('この 問題は 第' + lv + '章の「' + p.shortText + '」と おなじ');
+  if (q.mode === 'countF') {   // 連れ問：① 記号は どこを 指す？（ベン図を ぬる）→ ② 求める 式は？
+    const ex = COUNT_EX[q.kind];
+    p.steps = [
+      { label: p.exam ? '▼ 問題集の ことばで（①）' : '▼ ① どこを 指す？', display: p.exam ? '全体集合を U と する。n(' + ex + ') を 求める。まず ' + ex + ' を 図の 斜線で 示せ。' : 'n(' + ex + ') を 求める。まず ' + ex + ' は どこ？ ぬれ',
+        answer: { regions: EX[ex].slice() }, ex, reason: ['∪ は「または」、∩ は「かつ」、上の 線は「でない」（その 外がわ）', '→ ' + ex + ' は ' + REGION_WORD(EX[ex])] },
+      { label: p.exam ? '▼ 問題集の ことばで（②）' : '▼ ② 求める 式は？', display: p.display, options: p.options, reason: p.reason },
+    ];
+    useStep(p, 0);
+  }
   return p;
+}
+// 連れ問の 何段目を 出すか（画面と 判定は p の 今の 段を 使う）
+const COUNT_EX = { union: 'A∪B', comp: '‾{A}', neither: '‾{A}∩‾{B}' };
+const REGION_NAME = ['A だけ', 'A と B の 両方', 'B だけ', 'A にも B にも 入らない ところ'];
+const REGION_WORD = rs => rs.map(r => REGION_NAME[r]).join('・');
+function useStep(p, i) {
+  const st = p.steps[i];
+  p.stepIdx = i; p.label = st.label; p.display = st.display; p.long = st.display.length > 26; p.reason = st.reason;
+  p.options = st.options; p.answer = st.answer; p.ex = st.ex;
+  return p;
+}
+// ---------- ヒント（集合の 記号）：1回目 ＝ その 問題に 出る 記号の 読み方、2回目 ＝ 図で 式の 部分を 色分け ----------
+const SET_FORMS = ['vennTap', 'vennPick', 'elem', 'countF', 'deMorgan'];
+const hasHint = p => SET_FORMS.includes(p.mode);
+function exOf(p) { return p.mode === 'countF' ? (p.stepIdx === 0 ? p.ex : null) : p.mode === 'vennTap' ? p.prm.ex : p.mode === 'deMorgan' ? p.prm.ex : null; }
+function hintLines(p) {
+  const L = [];
+  if (p.mode === 'elem') return ['左が 数 → ∈（要素として 入る）か ∉（入らない）', '左が 集合 → ⊂ か ⊃（口の 開いた ほうが 大きい 集合）'];
+  if (p.mode === 'countF' && p.stepIdx === 1) {
+    if (p.prm.kind === 'union') return ['n(A) と n(B) を 足すと、両方に 入る A∩B を 2回 数えて しまう', '→ 2回めの ぶんを 1回 引く'];
+    if (p.prm.kind === 'comp') return ['‾{A} は A に 入らない もの', '→ 全体 U から A を 引く'];
+    return ['‾{A}∩‾{B} は A にも B にも 入らない ところ ＝ A∪B の 外がわ', '→ 全体 U から n(A∪B) を 引く'];
+  }
+  const ex = exOf(p) || '';
+  if (p.mode === 'vennPick') L.push('ぬられた ところが A に 入るか、B に 入るかを 区画ごとに 見る');
+  if (ex.includes('∪') || p.mode === 'vennPick') L.push('∪：または（A か B の どちらかに 入る）');
+  if (ex.includes('∩') || p.mode === 'vennPick') L.push('∩：かつ（A と B の 両方に 入る）');
+  if (ex.includes('‾') || p.mode === 'vennPick') L.push('上の 線：でない（線の 下の 集合の 外がわ）');
+  if (/‾\{A[∪∩]B\}/.test(ex)) L.push('線が 全体に かかって いる → かっこの 中を 先に、その 外がわ');
+  return L;
+}
+// 2回目の ヒント：式を 2つの 部分に 分けて 色分け（部分の 区画）。分けられない ときは 線の 下の 集合
+const SETOF = t => (t === 'A' ? [0, 1] : t === 'B' ? [1, 2] : EX[t]);
+function hintParts(p) {
+  const ex = exOf(p);
+  if (!ex) return null;
+  let m = ex.match(/^‾\{(A[∪∩]B)\}$/);
+  if (m) return { parts: [[m[1], EX[m[1]]]], op: 'bar' };
+  m = ex.match(/^(‾\{A\}|A)([∪∩])(‾\{B\}|B)$/);
+  if (m) return { parts: [[m[1], SETOF(m[1])], [m[3], SETOF(m[3])]], op: m[2] };
+  m = ex.match(/^‾\{([AB])\}$/);
+  if (m) return { parts: [[m[1], m[1] === 'A' ? [0, 1] : [1, 2]]], op: 'bar' };
+  return { parts: [[ex, EX[ex]]], op: 'id' };
 }
 
 // ---------- 判定・間違い方の 見分け ----------
 function judge(p, ans) { return p.options ? p.options[ans.opt].correct : sameSet(ans.regions, p.answer.regions); }
-function classify(p, ans) { return { types: p.options ? p.options[ans.opt].types.slice() : vennTypes(p.prm.ex, ans.regions) }; }
+function classify(p, ans) { return { types: p.options ? p.options[ans.opt].types.slice() : vennTypes(p.ex || p.prm.ex, ans.regions) }; }
 const TYPE_TEXT = {
   cupcap: '∪（または）と ∩（かつ）が 入れかわって いる', bar: '上の 線（でない）の ところが はんたい', demorgan: '線を 分ける ときは ∪ と ∩ を 入れかえる', half: 'ぬる ところが まだ ある', read: 'ぬられた ところの 読み方が ちがう',
   elemset: '∈ は 数と 集合、⊂ は 集合と 集合', inout: '入って いるか いないかが はんたい', dir: '⊂ と ⊃ の 向きが はんたい（口の 開いた ほうが 大きい）',
@@ -862,9 +919,11 @@ function describe(p, cls) { return cls.types.map(t => (t === 'scatter' && p.opti
 function masterText(t) { return MASTER_TEXT[t]; }
 function likeOK(q, m, types) {
   if (q.mode !== m.mode) return false;
+  const ex = q.ex || (q.mode === 'countF' ? COUNT_EX[q.kind] : '');   // 連れ問の ① は n( ) の 中の 集合
   for (const t of types) {
-    if ((t === 'demorgan') && !DM_WRONG[q.ex]) return false;
-    if (t === 'cupcap' && !(EX[swapCC(q.ex)] && swapCC(q.ex) !== q.ex)) return false;
+    if ((t === 'demorgan') && !DM_WRONG[ex]) return false;
+    if (t === 'cupcap' && !(EX[swapCC(ex)] && swapCC(ex) !== ex)) return false;
+    if (q.mode === 'countF' && ['cupcap', 'bar', 'demorgan', 'half'].includes(t) && q.kind !== m.kind) return false;   // ① の まちがいは 同じ 集合で
     if (['elemset', 'inout', 'dir'].includes(t) && q.rel !== m.rel) return false;
     if (['nosub', 'comp', 'part', 'sign'].includes(t) && q.kind !== m.kind) return false;
     if (t === 'rule' && 'sc' in q && 'sc' in m && RULES[q.sc] && RULES[m.sc] && RULES[q.sc].kind !== RULES[m.sc].kind) return false;
@@ -922,11 +981,11 @@ function makeProblem(slot, ctx, rng) {
   if (ctx.recent.length > 6) ctx.recent.shift();
   return p;
 }
-function record(ctx, p, ok, cls, ms) {
-  const ev = { lv: p.lv, kind: p.kind, mode: p.mode, form: p.form, ok, types: cls ? cls.types : [], target: p.target, ms, mastered: [] };
+function record(ctx, p, ok, cls, ms, hinted) {   // hinted：ヒントを 見た 問題は こくふくの 数に 入れない
+  const ev = { lv: p.lv, kind: p.kind, mode: p.mode, form: p.form, ok, types: cls ? cls.types : [], target: p.target, ms, mastered: [], hinted: !!hinted };
   const w = ctx.weak[p.lv];
   if (ok) {
-    if (p.target.lv && w && ++w.got >= 2) { ev.mastered.push(...w.types); delete ctx.weak[p.lv]; }
+    if (p.target.lv && w && !hinted && ++w.got >= 2) { ev.mastered.push(...w.types); delete ctx.weak[p.lv]; }
   } else {
     const main = cls.types.filter(t => t !== 'scatter');
     if (main.length) ctx.weak[p.lv] = { types: main, like: p.prm, got: 0 };
@@ -937,7 +996,7 @@ function record(ctx, p, ok, cls, ms) {
 }
 
 G.BaaiCore = {
-  FIG, vennGeo, vennRegion, EX, TAP_EX, DM_WRONG, swapCC, vennTypes, SETS, RULES, nP, nC, F, sub, sup, TAP, INTRO, DATA_V, migrateProg, migrateZk,
+  FIG, vennGeo, vennRegion, COUNT_EX, useStep, SET_FORMS, hasHint, hintLines, hintParts, EX, TAP_EX, DM_WRONG, swapCC, vennTypes, SETS, RULES, nP, nC, F, sub, sup, TAP, INTRO, DATA_V, migrateProg, migrateZk,
   CHAPTERS, NORM_CH, FORM_LV, MONSTERS, monsterOf, zukanAfter, zukanCount, GEN, genPrm, makeOptions, build, judge, classify,
   describe, masterText, likeOK, TYPE_TEXT, MASTER_TEXT, MID_HP, FINAL_HP, zakoHP, midHP, finalHP, CRIT, comboBonus, damage, makeSlots,
   newContext, makeProblem, record, mulberry32,
@@ -967,6 +1026,7 @@ const state = {
   phase: 'idle',        // 'play' | 'busy' | 'next'
   reveal: false, view: 'ans', tut: null, blinkOn: false,
   ctx: C.newContext(), onNext: null, bossMiss: false,
+  hintLv: 0, hintUsed: false, stepFail: null,   // ヒントの 段階・この 問題で ヒントを 見たか・連れ問の ① の まちがい
 };
 const chap = () => C.CHAPTERS[state.ch - 1];
 const zakoOf = c => c.zako || c.forms;
@@ -1175,7 +1235,10 @@ function paintRegion(ctx, v, W, H, r, color) {
 function drawVenn(ctx, g, q) {
   const v = vennGeo(g.W, g.H), m = q.prm, vk = viewKind(), d = g.d;
   if (m.mode === 'vennPick') C.EX[m.ex].forEach(r => paintRegion(ctx, v, g.W, g.H, r, 'rgba(255,159,67,0.7)'));   // 問題の 図（オレンジ）
-  if (m.mode === 'vennTap') {
+  const hp = state.hintLv >= 2 ? C.hintParts(q) : null;   // ヒントの 2回目：式の 部分を 色分け（水色・オレンジ）
+  if (hp && !state.reveal) hp.parts.forEach((x, i) => x[1].forEach(r => paintRegion(ctx, v, g.W, g.H, r, i ? 'rgba(255,159,67,0.45)' : 'rgba(127,232,255,0.4)')));
+  if (m.mode === 'countF' && q.stepIdx === 1) q.steps[0].answer.regions.forEach(r => paintRegion(ctx, v, g.W, g.H, r, 'rgba(170,135,0,0.9)'));   // ② では ① の 答えを 見せる
+  if (m.mode === 'vennTap' || (m.mode === 'countF' && q.stepIdx === 0)) {
     const set = vk === 'ans' ? q.answer.regions : state.sel.regions;
     set.forEach(r => paintRegion(ctx, v, g.W, g.H, r, vk === 'ans' ? 'rgba(170,135,0,0.9)' : 'rgba(30,90,210,0.85)'));
     if (state.tut && state.tut.step === 'tap' && state.blinkOn) q.answer.regions.filter(r => !state.sel.regions.includes(r)).forEach(r => paintRegion(ctx, v, g.W, g.H, r, HINT_COL));
@@ -1295,7 +1358,7 @@ function newProblem() {
     state.slots.push({ lv, boss: true });
   }
   state.problem = C.makeProblem(state.slots[state.slotIdx], state.ctx, rng);
-  resetInput();
+  resetInput(); state.hintLv = 0; state.hintUsed = false; state.stepFail = null; renderHint();
   state.phase = 'play';
   state.shownAt = performance.now();
   renderEnemy(); renderProblem(); renderControls(); renderStatus(); draw();
@@ -1322,13 +1385,69 @@ function submit() {
   if (state.tut) { tutDecide(); return; }
   if (!ready()) { setMessage(hint()); return; }
   const ans = answerNow(), ok = C.judge(q, ans), cls = ok ? null : C.classify(q, ans);
-  const ev = C.record(state.ctx, q, ok, cls, Math.round(performance.now() - state.shownAt));
+  if (q.steps && q.stepIdx === 0) { stepOne(ok, cls); return; }   // 連れ問の ①
+  if (q.steps && state.stepFail) { afterStepFail(ok); return; }   // ① を まちがえた あとの ②
+  const ev = C.record(state.ctx, q, ok, cls, Math.round(performance.now() - state.shownAt), state.hintUsed);
   if (ok) onCorrect(ev); else onWrong(cls);
+}
+// 連れ問：① が せいかいなら そのまま ② へ。① を まちがえたら ライフを 1つ へらし、正しい ぬり方を 見せて ② へ
+function goStep2(msg) {
+  C.useStep(p(), 1); resetInput(); state.hintLv = 0; renderHint();
+  state.phase = 'play'; renderProblem(); renderControls(); draw(); setMessage(msg + '\n' + hint());
+}
+function stepOne(ok, cls) {
+  const q = p();
+  state.reveal = true;
+  if (ok) {
+    state.phase = 'busy'; draw(); renderControls(); flashScreen();
+    setMessage('① せいかい！　' + q.ex + ' は きいろの ところ');
+    setTimeout(() => goStep2('つぎは ②'), 900);
+    return;
+  }
+  state.stepFail = cls; state.combo = 0;
+  if (atBoss()) state.bossMiss = true;
+  if (q.mab) state.mabMiss = true;
+  state.lives -= 1; state.phase = 'next'; state.view = 'ans';
+  draw(); renderControls(); renderStatus();
+  monsterAnim('miss-dmg'); showDamage('MISS', '#ff4444');
+  setMessage(['ざんねん！　' + C.describe(q, cls), 'ただしい ぬり方は こう（きいろ）', ...q.reason].join('\n'));
+  state.onNext = state.lives <= 0 ? () => { state.phase = 'idle'; $('gameOverScreen').classList.remove('hidden'); } : () => goStep2('② は この ぬり方で 考えよう');
+}
+function afterStepFail(ok) {   // ① を まちがえた 問題は ② が できても たおせない（もう一度）
+  const q = p(), cls = ok ? state.stepFail : C.classify(q, answerNow());
+  C.record(state.ctx, q, false, state.stepFail, Math.round(performance.now() - state.shownAt), state.hintUsed);
+  state.phase = 'next'; state.reveal = true; state.view = 'ans';
+  draw(); renderControls(); renderStatus();
+  setMessage((ok ? ['② は せいかい！', 'でも ① を まちがえたので、もう一度'] : ['ざんねん！　' + C.describe(q, cls), ...q.reason]).join('\n'));
+  state.onNext = () => { newProblem(); setMessage('もういちど！\n' + hint()); };
+}
+// ---------- ヒント ----------
+function renderHint() {
+  const q = p(), on = !!q && C.hasHint(q) && !state.tut;
+  $('hintBtn').classList.toggle('hidden', !on);
+  $('hintBtn').classList.toggle('used', state.hintLv >= (C.hintParts(q || {}) ? 2 : 1));
+}
+function showHint() {
+  const q = p();
+  if (!q || state.phase !== 'play' || !C.hasHint(q)) return;
+  const max = C.hintParts(q) ? 2 : 1;
+  if (state.hintLv >= max) return;
+  state.hintLv += 1;
+  if (!state.hintUsed) { state.hintUsed = true; if (atBoss()) state.bossMiss = true; if (q.mab) state.mabMiss = true; }   // ヒントを 見た 問題は れんぞく・◎ に ならない
+  const L = state.hintLv === 1 ? C.hintLines(q) : ['図の 色を 見よう'].concat(hintPartsText(q));
+  setMessage('💡 ヒント' + (max > 1 ? '（' + state.hintLv + '/' + max + '）' : '') + '\n' + L.join('\n') + (state.hintLv === max ? '' : '\n（もう一度 押すと 図で 見せる）') + '\n※ ヒントを 見た 問題は れんぞく・◎ に ならない');
+  renderHint(); draw();
+}
+function hintPartsText(q) {
+  const h = C.hintParts(q), c = ['水色', 'オレンジ'];
+  if (h.op === 'bar') return ['水色 ＝ ' + h.parts[0][0] + '。上の 線は その 外がわ'];
+  if (h.op === 'id') return ['水色 ＝ ' + h.parts[0][0]];
+  return h.parts.map((x, i) => c[i] + ' ＝ ' + x[0]).concat([h.op === '∪' ? '∪：どちらかの 色が ある ところ' : '∩：両方の 色が 重なる ところ']);
 }
 function onCorrect(ev) {
   const c = chap(), boss = atBoss(), e = enemyNow(), q = p();
-  state.combo = (state.combo || 0) + 1;
-  const hit = C.damage(q, heroLV(), ev, rng, state.combo);
+  if (!state.hintUsed) state.combo = (state.combo || 0) + 1;   // ヒントを 見た 問題は れんぞくに 数えない
+  const hit = C.damage(q, heroLV(), ev, rng, state.hintUsed ? 0 : state.combo);
   state.phase = 'busy'; state.reveal = true; state.hp -= hit.d;
   let hold = false, stay = false;
   // さいごの 章は 1周目だけ、すべての 章を 出しきるまで たおれない
@@ -1341,7 +1460,7 @@ function onCorrect(ev) {
   const lines = ['せいかい！　' + e.name + 'に　' + hit.d + ' の ダメージ！'];
   if (hit.crit) lines.unshift('かいしんの いちげき！');
   if (q.target && q.target.lv) lines.push('（にがての もんだいに せいかい ＋1）');
-  if (C.comboBonus(state.combo) > 0) lines.push('れんぞく せいかい ×' + state.combo + '（＋' + C.comboBonus(state.combo) + '）');
+  if (!state.hintUsed && C.comboBonus(state.combo) > 0) lines.push('れんぞく せいかい ×' + state.combo + '（＋' + C.comboBonus(state.combo) + '）');
   ev.mastered.forEach(t => lines.push('◎ ' + C.masterText(t) + ' こくふく！'));
   if (ev.mastered.length) zkEvent({ type: 'master', id: q.form }, lines);
   if (hold) lines.push(e.name + '「まだ たおれぬ！」');
@@ -1584,6 +1703,7 @@ optBtns.forEach((b, i) => b.addEventListener('click', () => {
   state.opt = i; renderControls();
 }));
 $('decideBtn').addEventListener('click', submit);
+$('hintBtn').addEventListener('click', showHint);
 $('ruleBtn').addEventListener('click', () => $('ruleScreen').classList.remove('hidden'));
 $('ruleClose').addEventListener('click', () => $('ruleScreen').classList.add('hidden'));
 $('ruleDef').addEventListener('click', () => { $('ruleScreen').classList.add('hidden'); $('defClose').textContent = '▶ もどる'; $('defScreen').classList.remove('hidden'); $('defScreen').scrollTop = 0; });
