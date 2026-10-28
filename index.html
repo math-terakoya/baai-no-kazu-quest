@@ -613,10 +613,11 @@ function makeOptions(q, rng) {
     add(tC(n, r), nC(n, r), []); add(tP(n, r), nP(n, r), ['order']); add(n + sup(r), Math.pow(n, r), ['rep']); add(n + ' × ' + r, n * r, ['rule']);
   }
   if (m === 'group') {
-    const G3 = [tC(6, 2) + ' × ' + tC(4, 2), nC(6, 2) * nC(4, 2), '3!', 6, 3], P3 = [tP(6, 2) + ' × ' + tP(4, 2), nP(6, 2) * nP(4, 2)];
+    // 3組目の ₂C₂ まで 入れて、3つの 組を 順に えらんだ 形に する（組に 名前が ない ときに 3! で 割る 理由が 見える）
+    const G3 = [tC(6, 2) + ' × ' + tC(4, 2) + ' × ' + tC(2, 2), nC(6, 2) * nC(4, 2), '3!', 6, 3], P3 = [tP(6, 2) + ' × ' + tP(4, 2) + ' × ' + tP(2, 2), nP(6, 2) * nP(4, 2) * 2];
     if (q.kind === 'rooms') { add(G3[0], G3[1], []); add(fr(G3[0], G3[2]), G3[1] / G3[3], ['label']); add(P3[0], P3[1], ['order']); add(fr(G3[0], G3[4]), G3[1] / G3[4], ['label']); }
     if (q.kind === 'groups') { add(fr(G3[0], G3[2]), G3[1] / G3[3], []); add(G3[0], G3[1], ['label']); add(fr(G3[0], G3[4]), G3[1] / G3[4], ['label']); add(fr(P3[0], G3[2]), P3[1] / G3[3], ['order']); }
-    if (q.kind === 'sizes') { add(tC(6, 3) + ' × ' + tC(3, 2), nC(6, 3) * nC(3, 2), []); add(fr(tC(6, 3) + ' × ' + tC(3, 2), '3!'), nC(6, 3) * nC(3, 2) / 6, ['label']); add(tP(6, 3) + ' × ' + tP(3, 2), nP(6, 3) * nP(3, 2), ['order']); add(tC(6, 3) + ' × ' + tC(6, 2) + ' × ' + tC(6, 1), nC(6, 3) * nC(6, 2) * 6, ['dup']); }
+    if (q.kind === 'sizes') { const S3 = tC(6, 3) + ' × ' + tC(3, 2) + ' × ' + tC(1, 1); add(S3, nC(6, 3) * nC(3, 2), []); add(fr(S3, '3!'), nC(6, 3) * nC(3, 2) / 6, ['label']); add(tP(6, 3) + ' × ' + tP(3, 2) + ' × ' + tP(1, 1), nP(6, 3) * nP(3, 2), ['order']); add(tC(6, 3) + ' × ' + tC(6, 2) + ' × ' + tC(6, 1), nC(6, 3) * nC(6, 2) * 6, ['dup']); }
   }
   if (m === 'shape') {
     const n = q.n;
@@ -629,9 +630,10 @@ function makeOptions(q, rng) {
     add(tC(b, 1) + ' × ' + tC(N - 1, r - 1), b * nC(N - 1, r - 1), ['dup']); add(tC(N, r), nC(N, r), ['comp']);
   }
   if (m === 'same') {
-    const ks = q.ks, n = ks.reduce((s, x) => s + x, 0), den = ks.filter(x => x > 1), dv = den.reduce((s, x) => s * F(x), 1);
+    // 分母は 文字の 種類 ぜんぶの 個数の 階乗（1文字しか ない ものも 1! と 書く：{5!|3! × 1! × 1!}）
+    const ks = q.ks, n = ks.reduce((s, x) => s + x, 0), den = ks.slice(), dv = den.reduce((s, x) => s * F(x), 1);
     const dt = den.map(x => x + '!').join(' × ');
-    add(fr(n + '!', dt), F(n) / dv, []); add(n + '!', F(n), ['nodiv']); add(fr(n + '!', den[0] + '!'), F(n) / F(den[0]), ['half']);
+    add(fr(n + '!', dt), F(n) / dv, []); add(n + '!', F(n), ['nodiv']); add(fr(n + '!', den[0] + '!'), F(n) / F(den[0]), ['divall']);
     if (den.length > 1) add(fr(n + '!', den.map(x => x + '!').join(' ＋ ')), F(n) / den.reduce((s, x) => s + F(x), 0), ['plus']);
     add(dt, dv, ['nodiv']);
   }
@@ -715,12 +717,12 @@ function reasonLines(q) {
   if (m === 'rep') add('1つずつ ' + q.k + '通りの えらび方が ' + q.r + '回 続く → ' + q.k + sup(q.r) + '（' + q.k + ' を ' + q.r + '回 かける）');
   if (m === 'group') {
     if (q.kind === 'rooms') add('部屋に 名前（A、B など）が ある → 組を 区別する → 割らない');
-    if (q.kind === 'groups') add('組に 名前が ない → 同じ 人数の 組の 入れかえ（3!通り）は 同じ 分け方 → 割る');
+    if (q.kind === 'groups') add('組に 名前が ない → 3つの 組を えらぶ 順番（3!通り）が ちがうだけの 分け方は 同じ → 割る');
     if (q.kind === 'sizes') add('組の 人数が ちがうので 組は 区別できる → 割らない');
   }
   if (m === 'shape') add(q.kind === 'tri' ? '頂点を 3つ えらべば 三角形が 1つ 決まる（順番は ない）→ ' + tC(q.n, 3) : '頂点を 2つ えらぶと 辺か 対角線 → ' + tC(q.n, 2) + ' から 辺の ' + q.n + '本を 引く');
   if (m === 'atleast') { add('「少なくとも 1人」は 反対（女子が 0人 ＝ 全員 男子）を 全体から 引く'); add('全体 ' + tC(q.a + q.b, q.r) + '、全員 男子 ' + tC(q.a, q.r)); }
-  if (m === 'same') add('ぜんぶ ちがう ものと して ' + q.letters.length + '! 並べ、同じ 文字どうしの 入れかえの 数で 割る');
+  if (m === 'same') add('ぜんぶ ちがう ものと して ' + q.letters.length + '! 並べ、文字ごとに 同じ 文字どうしの 入れかえの 数（' + q.ks.map((k, i) => 'abc'[i] + ' は ' + k + '!').join('、') + '）で 割る');
   if (m === 'route') add('右へ ' + q.w + '回、上へ ' + q.h + '回 進む → 右 ' + q.w + 'つと 上 ' + q.h + 'つの 並べ方（同じ ものを 含む 順列）');
   if (m === 'routeVia') add('A から C、C から B を 続けて 進む → それぞれの 最短経路の 数を かける');
   return L;
@@ -907,14 +909,14 @@ const TYPE_TEXT = {
   circle: '円では 回して 重なる 並びは 同じ（1つを 決める）', juzu: '{n!|2} は 裏返しも 同じ ときの 数え方（じゅず順列）', base: 'くり返す 回数が 指数（えらび方の 数を 回数ぶん かける）',
   norep: '何回 使っても よいので P では ない', label: '組に 名前が あるか ないかで 割るか 決める', dup: '同じ 組み合わせを 何回も 数えて いる',
   num: 'えらぶ 頂点の 数が ちがう', edge: '辺を 引いて いない', dbl: '1本の 対角線を 2つの 頂点から 2回 数えて いる', which: '反対の ことがら（女子が 0人）を まちがえて いる',
-  nodiv: '同じ ものの 入れかえで 割って いない', plus: '割る 数は かける（{n!|p! × q!}）', via: 'C を 通る ことを 使って いない',
+  nodiv: '同じ ものの 入れかえで 割って いない', divall: 'ほかの 文字の 入れかえでも 割る（文字の 種類 ぜんぶの 個数の 階乗）', plus: '割る 数は かける（{n!|p! × q!}）', via: 'C を 通る ことを 使って いない',
   scatter: 'ぬり方が ばらばら',
 };
 const MASTER_TEXT = {
   cupcap: '∪ と ∩', bar: '上の 線（でない）', demorgan: 'ド・モルガンの 法則', half: 'ぬる ところ', read: '記号の 読み方', elemset: '∈ と ⊂', inout: '∈ と ∉', dir: '⊂ と ⊃',
   nosub: '重なりを 引く', sign: '足す と 引く', part: '全体の 数え方', comp: '「でない」', rule: '和の 法則・積の 法則', pow: 'くり返し の とき', plus1: '約数の 個数',
   order: 'P と C', rep: 'くり返し', all: 'えらぶ 人数', inner: 'まとめの 中', block: 'ひとまとめ', gap: 'あいだと 外側', circle: '円順列', juzu: '円順列', base: '重複順列',
-  norep: '重複順列', label: '組分け', dup: '重なり', num: '頂点の 数', edge: '対角線', dbl: '対角線', which: '少なくとも', nodiv: '同じ ものを 含む 順列', plus: '同じ ものを 含む 順列', via: '通る 点',
+  norep: '重複順列', label: '組分け', dup: '重なり', num: '頂点の 数', edge: '対角線', dbl: '対角線', which: '少なくとも', nodiv: '同じ ものを 含む 順列', divall: '同じ ものを 含む 順列', plus: '同じ ものを 含む 順列', via: '通る 点',
 };
 function describe(p, cls) { return cls.types.map(t => (t === 'scatter' && p.options ? 'ちがう ものを えらんだ' : TYPE_TEXT[t])).join('、'); }
 function masterText(t) { return MASTER_TEXT[t]; }
